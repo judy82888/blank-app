@@ -30,47 +30,50 @@ CARE_GUIDES = {
     }
 }
 
-# Initialize tasks (same as Chinese version)
+# Initialize tasks (session state)
 if "tasks" not in st.session_state:
     st.session_state.tasks = []
 
-# ===================== Core Functions (1:1 copy from working Chinese version) =====================
+# ===================== Fixed Core Functions =====================
 def add_task(task_name, care_type, frequency):
     today = datetime.date.today()
+    # FIX: New tasks show up TODAY (not tomorrow)
     if frequency == "Daily":
-        next_due = today + timedelta(days=1)
+        next_due = today  # Daily tasks = due TODAY
         freq_code = "daily"
     elif frequency == "Weekly":
-        next_due = today + timedelta(weeks=1)
+        next_due = today  # Weekly tasks = due TODAY
         freq_code = "weekly"
     elif frequency == "Every 10 Days":
-        next_due = today + timedelta(days=10)
+        next_due = today  # 10-day tasks = due TODAY
         freq_code = "10days"
     else:
         return "❌ Invalid frequency"
     
-    st.session_state.tasks.append({
+    new_task = {
         "name": task_name,
         "type": care_type,
         "frequency": freq_code,
         "frequency_show": frequency,
         "last_done": None,
         "next_due": next_due
-    })
-    return f"✅ Task added: {task_name}, Next: {next_due.strftime('%Y-%m-%d')}"
+    }
+    st.session_state.tasks.append(new_task)
+    return f"✅ Task added: {task_name} (Due TODAY: {next_due.strftime('%Y-%m-%d')})"
 
 def complete_task(task_index):
     try:
         task = st.session_state.tasks[task_index]
         today = datetime.date.today()
         task["last_done"] = today
+        # After completing, set next due date
         if task["frequency"] == "daily":
             task["next_due"] = today + timedelta(days=1)
         elif task["frequency"] == "weekly":
             task["next_due"] = today + timedelta(weeks=1)
         elif task["frequency"] == "10days":
             task["next_due"] = today + timedelta(days=10)
-        return f"✅ Task completed"
+        return f"✅ Task completed! Next due: {task['next_due'].strftime('%Y-%m-%d')}"
     except IndexError:
         return "❌ Invalid task number"
 
@@ -112,8 +115,8 @@ def generate_travel_list(travel_days, caregiver_name, emergency_contact):
 **Basic Rules**: {CARE_GUIDES['succulent']['watering']} | {CARE_GUIDES['succulent']['light']}
 **Tasks**:
 """
-        for task in succulent_tasks:
-            list_text += f"- {task['name']}: Every {task['frequency_show']}\n"
+        for succulent_task in succulent_tasks:
+            list_text += f"- {succulent_task['name']}: Every {succulent_task['frequency_show']}\n"
     
     list_text += f"""
 #### ⚠️ Important Reminders
@@ -130,16 +133,16 @@ def generate_travel_list(travel_days, caregiver_name, emergency_contact):
 
     return list_text
 
-# ===================== UI (Same logic as working Chinese version) =====================
-st.set_page_config(page_title="Care Tool", page_icon="🌿")
+# ===================== Web Interface =====================
+st.set_page_config(page_title="Pet & Plant Care Tool", page_icon="🌿")
 st.title("🌿 Pet & Plant Care Tool (Dog/Cat/Succulent)")
 
 with st.sidebar:
-    selected = st.radio("Menu", ["View Guide", "Add Task", "To-Do Tasks", "Travel Checklist"])
+    selected = st.radio("Menu", ["View Care Guide", "Add Task", "To-Do Tasks", "Travel Checklist"])
 
-# 1. View Guide (Fixed mapping issue)
-if selected == "View Guide":
-    care_type = st.selectbox("Select Type", ["dog", "cat", "succulent"])  # Same as Chinese version
+# 1. View Care Guide
+if selected == "View Care Guide":
+    care_type = st.selectbox("Select Type", ["dog", "cat", "succulent"])
     guide = CARE_GUIDES[care_type]
     st.write(f"### {guide['name']} Care Rules")
     for k, v in guide.items():
@@ -147,10 +150,11 @@ if selected == "View Guide":
             st.write(f"- {k.replace('_', ' ').title()}: {v}")
     st.write(f"### Emergency: {guide['emergency']}")
 
-# 2. Add Task (Same as Chinese version)
+# 2. Add Task
 elif selected == "Add Task":
     task_name = st.text_input("Task Name (e.g.: Feed dog, Water succulent)")
     care_type = st.selectbox("Type", ["dog", "cat", "succulent"])
+    # Frequency options
     if care_type == "succulent":
         freq = st.selectbox("Frequency", ["Daily", "Weekly", "Every 10 Days"])
     else:
@@ -158,28 +162,31 @@ elif selected == "Add Task":
     
     if st.button("Add Task"):
         if task_name:
-            st.success(add_task(task_name, care_type, freq))
+            result = add_task(task_name, care_type, freq)
+            st.success(result)
         else:
             st.error("Task name cannot be empty")
 
-# 3. To-Do Tasks (Same as Chinese version)
+# 3. To-Do Tasks (Shows new tasks TODAY!)
 elif selected == "To-Do Tasks":
     today = datetime.date.today()
     st.write(f"### 📅 Today's Tasks ({today.strftime('%Y-%m-%d')})")
+    # Filter tasks due TODAY (including new ones!)
     today_tasks = [t for t in st.session_state.tasks if t["next_due"] == today]
     
     if today_tasks:
-        for i, t in enumerate(today_tasks):
+        for i, task in enumerate(today_tasks):
             col1, col2 = st.columns([0.8, 0.2])
             with col1:
-                st.write(f"{i+1}. {t['name']} ({CARE_GUIDES[t['type']]['name']})")
+                st.write(f"{i+1}. {task['name']} ({CARE_GUIDES[task['type']]['name']})")
             with col2:
                 if st.button("Complete", key=f"done_{i}"):
                     st.success(complete_task(i))
+                    st.rerun() # Refresh to show updated tasks
     else:
-        st.write("No tasks for today")
+        st.write("No tasks for today! Add a task above.")
 
-# 4. Travel Checklist (Same as Chinese version)
+# 4. Travel Checklist
 elif selected == "Travel Checklist":
     travel_days = st.number_input("Travel Days", min_value=1, value=7)
     caregiver = st.text_input("Caregiver Name")
@@ -189,6 +196,7 @@ elif selected == "Travel Checklist":
         if caregiver and contact and st.session_state.tasks:
             list_text = generate_travel_list(travel_days, caregiver, contact)
             st.markdown(list_text)
+            # Download button
             today = datetime.date.today()
             st.download_button(
                 label="Download Checklist",
