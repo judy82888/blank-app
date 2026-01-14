@@ -37,15 +37,14 @@ if "tasks" not in st.session_state:
 # ===================== Fixed Core Functions =====================
 def add_task(task_name, care_type, frequency):
     today = datetime.date.today()
-    # FIX: New tasks show up TODAY (not tomorrow)
     if frequency == "Daily":
-        next_due = today  # Daily tasks = due TODAY
+        next_due = today
         freq_code = "daily"
     elif frequency == "Weekly":
-        next_due = today  # Weekly tasks = due TODAY
+        next_due = today
         freq_code = "weekly"
     elif frequency == "Every 10 Days":
-        next_due = today  # 10-day tasks = due TODAY
+        next_due = today
         freq_code = "10days"
     else:
         return "❌ Invalid frequency"
@@ -61,12 +60,12 @@ def add_task(task_name, care_type, frequency):
     st.session_state.tasks.append(new_task)
     return f"✅ Task added: {task_name} (Due TODAY: {next_due.strftime('%Y-%m-%d')})"
 
+# 🔧 Fix: Correct index mapping for single task
 def complete_task(task_index):
     try:
         task = st.session_state.tasks[task_index]
         today = datetime.date.today()
         task["last_done"] = today
-        # After completing, set next due date
         if task["frequency"] == "daily":
             task["next_due"] = today + timedelta(days=1)
         elif task["frequency"] == "weekly":
@@ -154,7 +153,6 @@ if selected == "View Care Guide":
 elif selected == "Add Task":
     task_name = st.text_input("Task Name (e.g.: Feed dog, Water succulent)")
     care_type = st.selectbox("Type", ["dog", "cat", "succulent"])
-    # Frequency options
     if care_type == "succulent":
         freq = st.selectbox("Frequency", ["Daily", "Weekly", "Every 10 Days"])
     else:
@@ -167,11 +165,10 @@ elif selected == "Add Task":
         else:
             st.error("Task name cannot be empty")
 
-# 3. To-Do Tasks (Shows new tasks TODAY!)
+# 3. To-Do Tasks (Fixed single task issue)
 elif selected == "To-Do Tasks":
     today = datetime.date.today()
     st.write(f"### 📅 Today's Tasks ({today.strftime('%Y-%m-%d')})")
-    # Filter tasks due TODAY (including new ones!)
     today_tasks = [t for t in st.session_state.tasks if t["next_due"] == today]
     
     if today_tasks:
@@ -180,9 +177,11 @@ elif selected == "To-Do Tasks":
             with col1:
                 st.write(f"{i+1}. {task['name']} ({CARE_GUIDES[task['type']]['name']})")
             with col2:
-                if st.button("Complete", key=f"done_{i}"):
-                    st.success(complete_task(i))
-                    st.rerun() # Refresh to show updated tasks
+                # 🔧 Fix: Use global index from session_state.tasks, not filtered today_tasks
+                global_index = st.session_state.tasks.index(task)
+                if st.button("Complete", key=f"done_{global_index}"):
+                    st.success(complete_task(global_index))
+                    st.rerun()
     else:
         st.write("No tasks for today! Add a task above.")
 
@@ -196,7 +195,6 @@ elif selected == "Travel Checklist":
         if caregiver and contact and st.session_state.tasks:
             list_text = generate_travel_list(travel_days, caregiver, contact)
             st.markdown(list_text)
-            # Download button
             today = datetime.date.today()
             st.download_button(
                 label="Download Checklist",
