@@ -2,7 +2,7 @@ import streamlit as st
 import datetime
 from datetime import timedelta
 
-# ===================== Basic Care Guide Data =====================
+# ===================== 基础养护指南数据 =====================
 CARE_GUIDES = {
     "dog": {
         "name": "Dog",
@@ -30,15 +30,27 @@ CARE_GUIDES = {
     }
 }
 
-# Initialize tasks (session state)
+# 初始化任务（session state）
 if "tasks" not in st.session_state:
     st.session_state.tasks = []
 
-# ===================== Fixed Core Functions =====================
+# ===================== 核心修复：自动刷新任务日期 =====================
+def refresh_tasks_by_date():
+    """每次打开页面，自动检查系统日期，更新到期任务为今日待办"""
+    today = datetime.date.today()
+    for task in st.session_state.tasks:
+        # 如果任务的下次执行日期 ≤ 今天，自动设为今日待办
+        if task["next_due"] <= today:
+            task["next_due"] = today
+
+# 页面加载时，先执行日期刷新（关键！）
+refresh_tasks_by_date()
+
+# ===================== 核心功能函数 =====================
 def add_task(task_name, care_type, frequency):
     today = datetime.date.today()
     if frequency == "Daily":
-        next_due = today
+        next_due = today  # 新增任务当天就显示
         freq_code = "daily"
     elif frequency == "Weekly":
         next_due = today
@@ -60,12 +72,12 @@ def add_task(task_name, care_type, frequency):
     st.session_state.tasks.append(new_task)
     return f"✅ Task added: {task_name} (Due TODAY: {next_due.strftime('%Y-%m-%d')})"
 
-# 🔧 Fix: Correct index mapping for single task
 def complete_task(task_index):
     try:
         task = st.session_state.tasks[task_index]
         today = datetime.date.today()
         task["last_done"] = today
+        # 完成后，设置下次执行日期（每日=明天，每周=下周，10天=10天后）
         if task["frequency"] == "daily":
             task["next_due"] = today + timedelta(days=1)
         elif task["frequency"] == "weekly":
@@ -132,14 +144,14 @@ def generate_travel_list(travel_days, caregiver_name, emergency_contact):
 
     return list_text
 
-# ===================== Web Interface =====================
+# ===================== 网页界面 =====================
 st.set_page_config(page_title="Pet & Plant Care Tool", page_icon="🌿")
 st.title("🌿 Pet & Plant Care Tool (Dog/Cat/Succulent)")
 
 with st.sidebar:
     selected = st.radio("Menu", ["View Care Guide", "Add Task", "To-Do Tasks", "Travel Checklist"])
 
-# 1. View Care Guide
+# 1. 查看养护指南
 if selected == "View Care Guide":
     care_type = st.selectbox("Select Type", ["dog", "cat", "succulent"])
     guide = CARE_GUIDES[care_type]
@@ -149,7 +161,7 @@ if selected == "View Care Guide":
             st.write(f"- {k.replace('_', ' ').title()}: {v}")
     st.write(f"### Emergency: {guide['emergency']}")
 
-# 2. Add Task
+# 2. 添加任务
 elif selected == "Add Task":
     task_name = st.text_input("Task Name (e.g.: Feed dog, Water succulent)")
     care_type = st.selectbox("Type", ["dog", "cat", "succulent"])
@@ -165,10 +177,11 @@ elif selected == "Add Task":
         else:
             st.error("Task name cannot be empty")
 
-# 3. To-Do Tasks (Fixed single task issue)
+# 3. 今日待办（自动显示到期任务）
 elif selected == "To-Do Tasks":
     today = datetime.date.today()
     st.write(f"### 📅 Today's Tasks ({today.strftime('%Y-%m-%d')})")
+    # 筛选所有到期的任务（包括前一天加的）
     today_tasks = [t for t in st.session_state.tasks if t["next_due"] == today]
     
     if today_tasks:
@@ -177,15 +190,15 @@ elif selected == "To-Do Tasks":
             with col1:
                 st.write(f"{i+1}. {task['name']} ({CARE_GUIDES[task['type']]['name']})")
             with col2:
-                # 🔧 Fix: Use global index from session_state.tasks, not filtered today_tasks
+                # 获取任务在全局列表的真实索引
                 global_index = st.session_state.tasks.index(task)
                 if st.button("Complete", key=f"done_{global_index}"):
                     st.success(complete_task(global_index))
-                    st.rerun()
+                    st.rerun()  # 刷新页面，立即更新待办
     else:
         st.write("No tasks for today! Add a task above.")
 
-# 4. Travel Checklist
+# 4. 旅行代养清单
 elif selected == "Travel Checklist":
     travel_days = st.number_input("Travel Days", min_value=1, value=7)
     caregiver = st.text_input("Caregiver Name")
